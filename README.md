@@ -1,3 +1,139 @@
+Unity 测试代码
+~~~
+using System.Collections;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.PlayerLoop;
+using UnityEngine.UI;
+
+public class ChatTTSDemo : MonoBehaviour
+{
+    public Button m_kButton;
+    public InputField m_kInputField;
+
+
+    private string m_kAudioUrl = null;
+
+    private void Start()
+    {
+        m_kInputField.text = "哈哈，终于被我抓到了吧？牛皮，牛皮真的没话说，哥们！";
+        m_kButton.onClick.AddListener(() =>
+        {
+            PostRequest();
+        });
+    }
+
+    void Update()
+    {
+        if(m_kAudioUrl != null)
+        {
+            StartCoroutine(GetAudioClip(m_kAudioUrl));
+            m_kAudioUrl = null;
+        }
+    }
+
+    IEnumerator GetAudioClip(string url)
+    {
+        using (UnityWebRequest www = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.WAV))
+        {
+            yield return www.SendWebRequest();
+
+            if (www.result == UnityWebRequest.Result.ConnectionError)
+            {
+                Debug.Log(www.error);
+            }
+            else
+            {
+                AudioClip myClip = DownloadHandlerAudioClip.GetContent(www);
+                GetComponent<AudioSource>().clip = myClip;
+                GetComponent<AudioSource>().Play();
+            }
+        }
+    }
+
+
+    public async Task PostRequest()
+    {
+        using (var client = new HttpClient())
+        {
+            Dictionary<string,string> requestData = new Dictionary<string,string>()
+            {
+                {"text",m_kInputField.text}, //"哈哈，终于被我抓到了吧？牛皮，牛皮真的没话说，哥们！"
+                {"prompt",""},
+                {"voice","9999"},
+                {"temperature","0.01"},
+                {"top_p","0.1"},
+                {"top_k","1"},
+                {"refine_max_new_token","128"},
+                {"infer_max_new_token","1024"},
+                {"is_split","1"},
+                {"custom_voice","6"},
+                {"skip_refine","0"}
+            };
+
+            FormUrlEncodedContent formUrlEncodedContent = new FormUrlEncodedContent(requestData);
+
+            var response = await client.PostAsync("http://127.0.0.1:9966/tts", formUrlEncodedContent);
+            var responseString = await response.Content.ReadAsStringAsync();
+            //然后播放这个音频文件
+            Debug.LogError(responseString);
+            var ttsResponse = JsonConvert.DeserializeObject<TTSResponse>(responseString);
+            if (ttsResponse.code == 0)
+            {
+                //播放音频
+                Debug.LogError(ttsResponse.audio_files[0].url);
+                m_kAudioUrl = ttsResponse.url;
+            }
+            else
+            {
+                Debug.LogError("TTS请求失败");
+            }
+        }
+    }
+}
+
+
+ //TTSResponse json格式 
+            /*
+                "audio_files": [
+                    {
+                        "audio_duration": 1.76,
+                        "filename": "D:/ChatTTS-UI-0.84/static/wavs/001549_use3.22s-audio1.76s-seed6-te1e-05-tp0.1-tk1-textlen12-63003.wav",
+                        "inference_time": 3.22,
+                        "url": "http://127.0.0.1:9966/static/wavs/001549_use3.22s-audio1.76s-seed6-te1e-05-tp0.1-tk1-textlen12-63003.wav"
+                    }
+                ],
+                "code": 0,
+                "filename": "D:/ChatTTS-UI-0.84/static/wavs/001549_use3.22s-audio1.76s-seed6-te1e-05-tp0.1-tk1-textlen12-63003.wav",
+                "msg": "ok",
+                "url": "http://127.0.0.1:9966/static/wavs/001549_use3.22s-audio1.76s-seed6-te1e-05-tp0.1-tk1-textlen12-63003.wav"*/
+
+public class TTSResponse
+{
+    public List<AudioFile> audio_files { get; set; }
+    public int code { get; set; }
+    public string filename { get; set; }
+    public string msg { get; set; }
+    public string url { get; set; }
+}
+
+public class AudioFile
+{
+    public float audio_duration { get; set; }
+    public string filename { get; set; }
+    public float inference_time { get; set; }
+    public string url { get; set; }
+}
+~~~
+
+
+
+
 # ChatTTS webUI & API 
 
 一个简单的本地网页界面，直接在网页使用 [ChatTTS](https://github.com/2noise/chattts) 将文字合成为语音，支持中英文、数字混杂，并提供API接口。
